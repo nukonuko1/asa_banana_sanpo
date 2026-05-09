@@ -1,0 +1,22 @@
+{
+  "name": "朝バナナ散歩",
+  "short_name": "朝バナナ散歩",
+  "description": "朝20分、人生を整える。歩く。食べる。記録する。",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFFBF0",
+  "theme_color": "#F59E0B",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
