@@ -9,6 +9,10 @@ import StatsCards from "@/components/StatsCards";
 import GrowthPlant from "@/components/GrowthPlant";
 import KnowledgeCard from "@/components/KnowledgeCard";
 import DailyMemo from "@/components/DailyMemo";
+import MorningSwitch from "@/components/MorningSwitch";
+import NightPrep from "@/components/NightPrep";
+import MoodCheck from "@/components/MoodCheck";
+import SevenDayChallenge from "@/components/SevenDayChallenge";
 import {
   DailyRecord,
   getAllRecords,
@@ -29,6 +33,7 @@ export default function Home() {
   const [allRecords, setAllRecords] = useState<DailyRecord[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [showMorningSwitch, setShowMorningSwitch] = useState(false);
 
   const loadData = useCallback(() => {
     const records = getAllRecords();
@@ -43,9 +48,30 @@ export default function Home() {
     loadData();
   }, [loadData]);
 
+  // Show morning switch if morningWeight not yet set today
+  useEffect(() => {
+    if (mounted && todayRecord && !todayRecord.morningWeight) {
+      setShowMorningSwitch(true);
+    }
+  }, [mounted, todayRecord]);
+
   const handleTabChange = (tab: Tab) => {
     setActiveTab(tab);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleMorningSwitchComplete = (tab: Tab) => {
+    setShowMorningSwitch(false);
+    setActiveTab(tab);
+    loadData();
+  };
+
+  const handleMorningSwitchSkip = () => {
+    // Save a placeholder so overlay doesn't re-appear
+    const record = getTodayRecord();
+    saveRecord({ ...record, morningWeight: "normal" });
+    setShowMorningSwitch(false);
+    loadData();
   };
 
   const handleBanana = () => {
@@ -71,6 +97,14 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-amber-50">
+      {/* Morning switch overlay */}
+      {showMorningSwitch && (
+        <MorningSwitch
+          onComplete={handleMorningSwitchComplete}
+          onSkip={handleMorningSwitchSkip}
+        />
+      )}
+
       <main className="max-w-lg mx-auto pb-24">
         {activeTab === "home" && (
           <HomeScreen
@@ -83,12 +117,16 @@ export default function Home() {
           />
         )}
         {activeTab === "timer" && (
-          <Timer onWalkComplete={handleWalkComplete} />
+          <Timer
+            onWalkComplete={handleWalkComplete}
+            todayRecord={todayRecord}
+          />
         )}
         {activeTab === "record" && (
           <RecordScreen
             todayRecord={todayRecord}
             stats={stats}
+            allRecords={allRecords}
             onUpdate={loadData}
           />
         )}
@@ -105,7 +143,7 @@ export default function Home() {
   );
 }
 
-// ─── Home Screen ────────────────────────────────────────────────────────────
+// ─── Home Screen ─────────────────────────────────────────────────────────────
 
 interface HomeScreenProps {
   todayRecord: DailyRecord;
@@ -119,6 +157,12 @@ interface HomeScreenProps {
 function HomeScreen({ todayRecord, stats, allRecords, onBanana, onTabChange, onUpdate }: HomeScreenProps) {
   const today = new Date();
   const bothComplete = todayRecord.walked && todayRecord.ateBanana;
+
+  const MOOD_EMOJIS = ["😫", "😔", "😐", "🙂", "😊"];
+  const moodImproved =
+    todayRecord.moodBefore !== undefined &&
+    todayRecord.moodAfter !== undefined &&
+    todayRecord.moodAfter > todayRecord.moodBefore;
 
   return (
     <div className="flex flex-col gap-4 px-4 pt-6 pb-4">
@@ -160,7 +204,11 @@ function HomeScreen({ todayRecord, stats, allRecords, onBanana, onTabChange, onU
         {bothComplete && (
           <div className="mt-3 text-center bg-white rounded-2xl py-2 px-3">
             <p className="text-amber-600 font-semibold text-sm">🌟 今日の朝リズム、完成です！</p>
-            <p className="text-amber-400 text-xs">小さな一歩が積み上がっています。</p>
+            {moodImproved && (
+              <p className="text-teal-500 text-xs mt-0.5">
+                {MOOD_EMOJIS[todayRecord.moodBefore! - 1]} → {MOOD_EMOJIS[todayRecord.moodAfter! - 1]} 歩いた後、少し軽くなりましたね。
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -174,7 +222,6 @@ function HomeScreen({ todayRecord, stats, allRecords, onBanana, onTabChange, onU
           🚶 20分朝散歩を始める
         </button>
       )}
-
       {todayRecord.walked && !todayRecord.ateBanana && (
         <button
           onClick={onBanana}
@@ -183,7 +230,6 @@ function HomeScreen({ todayRecord, stats, allRecords, onBanana, onTabChange, onU
           🍌 バナナを食べた！
         </button>
       )}
-
       {todayRecord.walked && todayRecord.ateBanana && (
         <button
           onClick={() => onTabChange("timer")}
@@ -195,23 +241,13 @@ function HomeScreen({ todayRecord, stats, allRecords, onBanana, onTabChange, onU
 
       {/* Secondary buttons */}
       <div className="grid grid-cols-2 gap-3">
-        {!todayRecord.ateBanana && todayRecord.walked && (
-          <button
-            onClick={onBanana}
-            className="bg-yellow-50 border border-yellow-200 hover:bg-yellow-100 text-yellow-700 font-semibold py-3 rounded-2xl text-sm active:scale-95 transition-all"
-          >
-            🍌 バナナを食べた
-          </button>
-        )}
-        {!todayRecord.walked && (
-          <button
-            onClick={onBanana}
-            disabled={todayRecord.ateBanana}
-            className="bg-yellow-50 border border-yellow-200 hover:bg-yellow-100 text-yellow-700 font-semibold py-3 rounded-2xl text-sm active:scale-95 transition-all disabled:opacity-50"
-          >
-            {todayRecord.ateBanana ? "🍌 バナナ済み" : "🍌 バナナを食べた"}
-          </button>
-        )}
+        <button
+          onClick={onBanana}
+          disabled={todayRecord.ateBanana}
+          className="bg-yellow-50 border border-yellow-200 hover:bg-yellow-100 text-yellow-700 font-semibold py-3 rounded-2xl text-sm active:scale-95 transition-all disabled:opacity-50"
+        >
+          {todayRecord.ateBanana ? "🍌 バナナ済み" : "🍌 バナナを食べた"}
+        </button>
         <button
           onClick={() => onTabChange("record")}
           className="bg-amber-50 border border-amber-200 hover:bg-amber-100 text-amber-700 font-semibold py-3 rounded-2xl text-sm active:scale-95 transition-all"
@@ -232,6 +268,11 @@ function HomeScreen({ todayRecord, stats, allRecords, onBanana, onTabChange, onU
         </div>
       </div>
 
+      {/* 7-day challenge compact */}
+      <button onClick={() => onTabChange("record")} className="text-left active:scale-95 transition-all">
+        <SevenDayChallenge records={allRecords} compact />
+      </button>
+
       {/* Plant growth preview */}
       <button onClick={() => onTabChange("learn")} className="text-left active:scale-95 transition-all">
         <GrowthPlant completeCount={stats.completeCount} compact />
@@ -245,7 +286,20 @@ function HomeScreen({ todayRecord, stats, allRecords, onBanana, onTabChange, onU
       {/* Memo quick entry */}
       <DailyMemo todayRecord={todayRecord} onUpdate={onUpdate} compact />
 
-      {/* About section */}
+      {/* Night prep shortcut */}
+      <button
+        onClick={() => onTabChange("record")}
+        className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex items-center gap-3 active:scale-95 transition-all w-full text-left"
+      >
+        <span className="text-2xl">🌙</span>
+        <div>
+          <p className="text-sm font-bold text-indigo-700">夜の準備をする</p>
+          <p className="text-xs text-indigo-400">明日の朝を今夜セットしておく</p>
+        </div>
+        <span className="ml-auto text-indigo-300">›</span>
+      </button>
+
+      {/* About */}
       <div className="bg-white border border-amber-100 rounded-2xl p-4">
         <p className="text-sm font-bold text-amber-700 mb-2">💚 このアプリについて</p>
         <p className="text-xs text-gray-500 leading-relaxed">
@@ -254,60 +308,65 @@ function HomeScreen({ todayRecord, stats, allRecords, onBanana, onTabChange, onU
         </p>
         <p className="text-xs text-gray-400 mt-2 leading-relaxed">
           ※ このアプリは医療・医学的アドバイスを提供するものではありません。
-          健康上の課題がある方は専門家にご相談ください。
         </p>
       </div>
     </div>
   );
 }
 
-// ─── Record Screen ───────────────────────────────────────────────────────────
+// ─── Record Screen ────────────────────────────────────────────────────────────
 
 interface RecordScreenProps {
   todayRecord: DailyRecord;
   stats: Stats;
+  allRecords: DailyRecord[];
   onUpdate: () => void;
 }
 
-function RecordScreen({ todayRecord, stats, onUpdate }: RecordScreenProps) {
-  const [view, setView] = useState<"memo" | "stats" | "check">("memo");
+function RecordScreen({ todayRecord, stats, allRecords, onUpdate }: RecordScreenProps) {
+  const [view, setView] = useState<"memo" | "check" | "mood" | "night" | "stats" | "seven">("memo");
+
+  const subTabs: { id: typeof view; label: string }[] = [
+    { id: "memo", label: "📝 日記" },
+    { id: "check", label: "✅ チェック" },
+    { id: "mood", label: "😊 気分" },
+    { id: "night", label: "🌙 夜準備" },
+    { id: "seven", label: "📆 7日" },
+    { id: "stats", label: "📊 統計" },
+  ];
 
   return (
     <div className="flex flex-col">
-      {/* Sub navigation */}
-      <div className="flex gap-1 bg-white border-b border-amber-100 px-4 pt-4 pb-0">
-        {(["memo", "check", "stats"] as const).map((v) => {
-          const labels = { memo: "📝 日記", check: "✅ チェック", stats: "📊 記録" };
-          return (
+      {/* Sub navigation — horizontal scroll */}
+      <div className="bg-white border-b border-amber-100 px-2 pt-4 pb-0 overflow-x-auto">
+        <div className="flex gap-1 min-w-max pb-px">
+          {subTabs.map((tab) => (
             <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`flex-1 py-2 text-sm font-semibold rounded-t-xl transition-colors ${
-                view === v
+              key={tab.id}
+              onClick={() => setView(tab.id)}
+              className={`whitespace-nowrap px-3 py-2 text-xs font-semibold rounded-t-xl transition-colors ${
+                view === tab.id
                   ? "bg-amber-50 text-amber-600 border-t-2 border-amber-400"
                   : "text-gray-400 hover:text-amber-400"
               }`}
             >
-              {labels[v]}
+              {tab.label}
             </button>
-          );
-        })}
+          ))}
+        </div>
       </div>
 
-      {view === "memo" && (
-        <DailyMemo todayRecord={todayRecord} onUpdate={onUpdate} />
-      )}
-      {view === "check" && (
-        <TodayCheck record={todayRecord} onUpdate={onUpdate} />
-      )}
-      {view === "stats" && (
-        <StatsCards stats={stats} />
-      )}
+      {view === "memo" && <DailyMemo todayRecord={todayRecord} onUpdate={onUpdate} />}
+      {view === "check" && <TodayCheck record={todayRecord} onUpdate={onUpdate} />}
+      {view === "mood" && <MoodCheck todayRecord={todayRecord} onUpdate={onUpdate} />}
+      {view === "night" && <NightPrep />}
+      {view === "seven" && <SevenDayChallenge records={allRecords} />}
+      {view === "stats" && <StatsCards stats={stats} />}
     </div>
   );
 }
 
-// ─── Learn Screen ────────────────────────────────────────────────────────────
+// ─── Learn Screen ─────────────────────────────────────────────────────────────
 
 interface LearnScreenProps {
   stats: Stats;
@@ -318,7 +377,6 @@ function LearnScreen({ stats }: LearnScreenProps) {
 
   return (
     <div className="flex flex-col">
-      {/* Sub navigation */}
       <div className="flex gap-1 bg-white border-b border-amber-100 px-4 pt-4 pb-0">
         {(["cards", "plant"] as const).map((v) => {
           const labels = { cards: "💡 雑学カード", plant: "🌱 植物育成" };
