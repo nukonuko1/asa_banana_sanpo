@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { getTodayString, getTodaysNightPrep, saveNightPrep, NightPrep as INightPrep } from "@/lib/storage";
 
 const EXAMPLE_MESSAGES = [
@@ -11,7 +11,7 @@ const EXAMPLE_MESSAGES = [
 ];
 
 interface CheckItem {
-  key: keyof Omit<INightPrep, "date" | "tomorrowMinimumAction" | "messageToTomorrowSelf">;
+  key: keyof Pick<INightPrep, "bananaPrepared" | "shoesPrepared" | "clothesPrepared" | "alarmSet" | "alarmNameSet">;
   emoji: string;
   label: string;
   detail: string;
@@ -22,10 +22,10 @@ const checkItems: CheckItem[] = [
   { key: "shoesPrepared", emoji: "👟", label: "靴を出した", detail: "玄関に出しておくだけでOK" },
   { key: "clothesPrepared", emoji: "👕", label: "散歩する服を決めた", detail: "着替えの手間を減らす" },
   { key: "alarmSet", emoji: "⏰", label: "スマホのアラームを設定した", detail: "起きる時間の5分前も便利" },
-  { key: "alarmNamed", emoji: "📛", label: "アラーム名を「朝バナナ散歩」にした", detail: "起きた瞬間に目的を思い出せる" },
+  { key: "alarmNameSet", emoji: "📛", label: "アラーム名を「朝バナナ散歩を開く」にした", detail: "起きた瞬間に目的を思い出せる" },
 ];
 
-const actionOptions = [
+const actionOptions: { id: "walk20" | "walk5" | "bananaOnly"; label: string }[] = [
   { id: "walk20", label: "20分歩く" },
   { id: "walk5", label: "5分だけ外に出る" },
   { id: "bananaOnly", label: "バナナだけ食べる" },
@@ -35,14 +35,16 @@ export default function NightPrep() {
   const today = getTodayString();
   const existing = getTodaysNightPrep();
 
-  const [checks, setChecks] = useState<Record<string, boolean>>({
+  const [checks, setChecks] = useState({
     bananaPrepared: existing?.bananaPrepared ?? false,
     shoesPrepared: existing?.shoesPrepared ?? false,
     clothesPrepared: existing?.clothesPrepared ?? false,
     alarmSet: existing?.alarmSet ?? false,
-    alarmNamed: existing?.alarmNamed ?? false,
+    alarmNameSet: existing?.alarmNameSet ?? false,
   });
-  const [tomorrowAction, setTomorrowAction] = useState(existing?.tomorrowMinimumAction ?? "");
+  const [tomorrowAction, setTomorrowAction] = useState<"walk20" | "walk5" | "bananaOnly">(
+    existing?.tomorrowMinimumAction ?? "walk20"
+  );
   const [message, setMessage] = useState(existing?.messageToTomorrowSelf ?? "");
   const [saved, setSaved] = useState(false);
   const [exampleIdx, setExampleIdx] = useState(0);
@@ -50,24 +52,20 @@ export default function NightPrep() {
   const checkedCount = Object.values(checks).filter(Boolean).length;
 
   const handleToggle = (key: string) => {
-    setChecks((prev) => ({ ...prev, [key]: !prev[key] }));
+    setChecks((prev) => ({ ...prev, [key]: !prev[key as keyof typeof prev] }));
     setSaved(false);
   };
 
   const handleSave = () => {
     const prep: INightPrep = {
       date: today,
-      bananaPrepared: checks.bananaPrepared,
-      shoesPrepared: checks.shoesPrepared,
-      clothesPrepared: checks.clothesPrepared,
-      alarmSet: checks.alarmSet,
-      alarmNamed: checks.alarmNamed,
+      ...checks,
       tomorrowMinimumAction: tomorrowAction,
       messageToTomorrowSelf: message.trim(),
     };
     saveNightPrep(prep);
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setTimeout(() => setSaved(false), 3000);
   };
 
   const fillExample = () => {
@@ -77,17 +75,24 @@ export default function NightPrep() {
   };
 
   return (
-    <div className="flex flex-col gap-4 px-4 pb-4">
+    <div className="flex flex-col gap-4 px-4 pb-6">
       <div className="pt-4">
-        <h2 className="text-2xl font-bold text-indigo-700">夜の準備</h2>
-        <p className="text-indigo-500 text-sm mt-1">明日の朝を軽くする準備</p>
+        <h2 className="text-2xl font-bold text-indigo-700">夜の明日セット</h2>
+        <p className="text-indigo-400 text-sm mt-1">明日の朝を軽くする準備</p>
       </div>
 
-      {/* Progress */}
       <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4">
+        <p className="text-indigo-700 text-sm leading-relaxed">
+          朝の自分は、まだ眠くて弱い。<br />
+          だから夜の自分が、明日の朝を助けてあげましょう。
+        </p>
+      </div>
+
+      {/* Progress bar */}
+      <div className="bg-white border border-indigo-100 rounded-2xl p-4">
         <div className="flex items-center justify-between mb-2">
           <p className="text-sm font-semibold text-indigo-700">今夜の準備</p>
-          <span className="text-indigo-500 text-sm font-bold">{checkedCount} / {checkItems.length}</span>
+          <span className="text-indigo-500 text-sm font-bold">{checkedCount}/{checkItems.length}</span>
         </div>
         <div className="h-2.5 bg-indigo-100 rounded-full overflow-hidden">
           <div
@@ -100,11 +105,11 @@ export default function NightPrep() {
       {/* Checklist */}
       <div className="flex flex-col gap-2">
         {checkItems.map((item) => {
-          const checked = checks[item.key as string];
+          const checked = checks[item.key];
           return (
             <button
               key={item.key}
-              onClick={() => handleToggle(item.key as string)}
+              onClick={() => handleToggle(item.key)}
               className={`flex items-center gap-3 p-4 rounded-2xl border transition-all active:scale-95 ${
                 checked ? "bg-indigo-50 border-indigo-200" : "bg-white border-gray-100 hover:border-indigo-100"
               }`}
@@ -150,10 +155,7 @@ export default function NightPrep() {
       <div className="bg-white border border-gray-100 rounded-2xl p-4">
         <div className="flex items-center justify-between mb-2">
           <p className="text-sm font-bold text-gray-700">明日の自分への一言</p>
-          <button
-            onClick={fillExample}
-            className="text-xs text-indigo-400 hover:text-indigo-600 transition-colors"
-          >
+          <button onClick={fillExample} className="text-xs text-indigo-400 hover:text-indigo-600">
             例文を使う
           </button>
         </div>
@@ -171,20 +173,23 @@ export default function NightPrep() {
       {/* Save button */}
       <button
         onClick={handleSave}
-        className={`w-full font-bold py-4 rounded-2xl text-base active:scale-95 transition-all ${
-          saved
-            ? "bg-green-400 text-white"
-            : "bg-indigo-400 hover:bg-indigo-500 text-white"
+        className={`w-full font-bold py-5 rounded-2xl text-base active:scale-95 transition-all ${
+          saved ? "bg-green-400 text-white" : "bg-indigo-500 hover:bg-indigo-600 text-white"
         }`}
       >
-        {saved ? "✓ 保存しました！明日の朝に表示されます" : "🌙 明日の準備を保存する"}
+        {saved ? "✓ 明日の朝の準備ができました！" : "明日の朝をセットする"}
       </button>
 
-      <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-3 text-center">
-        <p className="text-indigo-500 text-xs">
-          保存した内容は明日の朝、起動スイッチ画面に表示されます。
-        </p>
-      </div>
+      {saved && (
+        <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 text-center">
+          <p className="text-indigo-600 text-sm font-medium">
+            明日の朝の準備ができました。
+          </p>
+          <p className="text-indigo-400 text-xs mt-1">
+            朝の自分を、夜の自分が助けてくれます。
+          </p>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,3 +1,12 @@
+export type MinimumAction =
+  | "walk20"
+  | "walk5"
+  | "bananaOnly"
+  | "curtain"
+  | "window1"
+  | "bananaBite"
+  | "entrance";
+
 export interface DailyRecord {
   date: string;
   walked: boolean;
@@ -5,10 +14,11 @@ export interface DailyRecord {
   ateBanana: boolean;
   memo: string;
   completed: boolean;
+  recoveryCompleted?: boolean;
   moodBefore?: number;
   moodAfter?: number;
   morningWeight?: "heavy" | "normal" | "light";
-  selectedMinimumAction?: "walk20" | "walk5" | "bananaOnly" | "window1" | "entrance";
+  selectedMinimumAction?: MinimumAction;
 }
 
 export interface NightPrep {
@@ -17,8 +27,8 @@ export interface NightPrep {
   shoesPrepared: boolean;
   clothesPrepared: boolean;
   alarmSet: boolean;
-  alarmNamed: boolean;
-  tomorrowMinimumAction: string;
+  alarmNameSet: boolean;
+  tomorrowMinimumAction: "walk20" | "walk5" | "bananaOnly";
   messageToTomorrowSelf: string;
 }
 
@@ -38,13 +48,10 @@ export function getTodayString(): string {
   return `${y}-${m}-${d}`;
 }
 
-function getYesterdayString(): string {
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const y = yesterday.getFullYear();
-  const m = String(yesterday.getMonth() + 1).padStart(2, "0");
-  const d = String(yesterday.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+export function getYesterdayString(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export function getAllRecords(): DailyRecord[] {
@@ -52,36 +59,39 @@ export function getAllRecords(): DailyRecord[] {
   try {
     const raw = localStorage.getItem(RECORDS_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as DailyRecord[];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
 }
 
 export function getRecord(date: string): DailyRecord | null {
-  const records = getAllRecords();
-  return records.find((r) => r.date === date) ?? null;
+  return getAllRecords().find((r) => r.date === date) ?? null;
 }
 
 export function getTodayRecord(): DailyRecord {
   const today = getTodayString();
-  const existing = getRecord(today);
-  if (existing) return existing;
-  return {
-    date: today,
-    walked: false,
-    walkMinutes: 0,
-    ateBanana: false,
-    memo: "",
-    completed: false,
-  };
+  return (
+    getRecord(today) ?? {
+      date: today,
+      walked: false,
+      walkMinutes: 0,
+      ateBanana: false,
+      memo: "",
+      completed: false,
+    }
+  );
 }
 
 export function saveRecord(record: DailyRecord): void {
   if (typeof window === "undefined") return;
   const records = getAllRecords();
   const idx = records.findIndex((r) => r.date === record.date);
-  const updated = { ...record, completed: record.walked && record.ateBanana };
+  const updated: DailyRecord = {
+    ...record,
+    completed: record.walked && record.ateBanana,
+  };
   if (idx >= 0) {
     records[idx] = updated;
   } else {
@@ -95,8 +105,7 @@ export function getSettings(): Settings {
   if (typeof window === "undefined") return { timerMinutes: 20 };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
-    if (!raw) return { timerMinutes: 20 };
-    return JSON.parse(raw) as Settings;
+    return raw ? (JSON.parse(raw) as Settings) : { timerMinutes: 20 };
   } catch {
     return { timerMinutes: 20 };
   }
@@ -111,8 +120,7 @@ export function getNightPrep(date: string): NightPrep | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(`${NIGHT_PREP_KEY}_${date}`);
-    if (!raw) return null;
-    return JSON.parse(raw) as NightPrep;
+    return raw ? (JSON.parse(raw) as NightPrep) : null;
   } catch {
     return null;
   }

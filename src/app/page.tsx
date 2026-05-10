@@ -3,10 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import Navigation, { Tab } from "@/components/Navigation";
 import Timer from "@/components/Timer";
-import TodayCheck from "@/components/TodayCheck";
 import CalendarView from "@/components/CalendarView";
 import StatsCards from "@/components/StatsCards";
-import GrowthPlant from "@/components/GrowthPlant";
 import KnowledgeCard from "@/components/KnowledgeCard";
 import DailyMemo from "@/components/DailyMemo";
 import MorningSwitch from "@/components/MorningSwitch";
@@ -17,23 +15,15 @@ import {
   DailyRecord,
   getAllRecords,
   getTodayRecord,
-  saveRecord,
-  getTodayString,
 } from "@/lib/storage";
 import { calculateStats, Stats } from "@/lib/stats";
 
-function formatJapaneseDate(date: Date): string {
-  const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
-  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日（${weekdays[date.getDay()]}）`;
-}
-
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<Tab>("home");
+  const [activeTab, setActiveTab] = useState<Tab>("switch");
   const [todayRecord, setTodayRecord] = useState<DailyRecord | null>(null);
   const [allRecords, setAllRecords] = useState<DailyRecord[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [mounted, setMounted] = useState(false);
-  const [showMorningSwitch, setShowMorningSwitch] = useState(false);
 
   const loadData = useCallback(() => {
     const records = getAllRecords();
@@ -48,36 +38,9 @@ export default function Home() {
     loadData();
   }, [loadData]);
 
-  // Show morning switch if morningWeight not yet set today
-  useEffect(() => {
-    if (mounted && todayRecord && !todayRecord.morningWeight) {
-      setShowMorningSwitch(true);
-    }
-  }, [mounted, todayRecord]);
-
   const handleTabChange = (tab: Tab) => {
     setActiveTab(tab);
     window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const handleMorningSwitchComplete = (tab: Tab) => {
-    setShowMorningSwitch(false);
-    setActiveTab(tab);
-    loadData();
-  };
-
-  const handleMorningSwitchSkip = () => {
-    // Save a placeholder so overlay doesn't re-appear
-    const record = getTodayRecord();
-    saveRecord({ ...record, morningWeight: "normal" });
-    setShowMorningSwitch(false);
-    loadData();
-  };
-
-  const handleBanana = () => {
-    const current = getTodayRecord();
-    saveRecord({ ...current, ateBanana: true });
-    loadData();
   };
 
   const handleWalkComplete = () => {
@@ -95,24 +58,17 @@ export default function Home() {
     );
   }
 
+  const timerInitialMinutes =
+    todayRecord.selectedMinimumAction === "walk5" ? 5 : 20;
+
   return (
     <div className="min-h-screen bg-amber-50">
-      {/* Morning switch overlay */}
-      {showMorningSwitch && (
-        <MorningSwitch
-          onComplete={handleMorningSwitchComplete}
-          onSkip={handleMorningSwitchSkip}
-        />
-      )}
-
       <main className="max-w-lg mx-auto pb-24">
-        {activeTab === "home" && (
-          <HomeScreen
+        {activeTab === "switch" && (
+          <MorningSwitch
             todayRecord={todayRecord}
             stats={stats}
-            allRecords={allRecords}
-            onBanana={handleBanana}
-            onTabChange={handleTabChange}
+            onNavigate={handleTabChange}
             onUpdate={loadData}
           />
         )}
@@ -120,6 +76,7 @@ export default function Home() {
           <Timer
             onWalkComplete={handleWalkComplete}
             todayRecord={todayRecord}
+            initialMinutes={timerInitialMinutes}
           />
         )}
         {activeTab === "record" && (
@@ -130,186 +87,15 @@ export default function Home() {
             onUpdate={loadData}
           />
         )}
-        {activeTab === "calendar" && (
-          <CalendarView records={allRecords} />
+        {activeTab === "seven" && (
+          <SevenDayChallenge records={allRecords} />
         )}
-        {activeTab === "learn" && (
-          <LearnScreen stats={stats} />
+        {activeTab === "night" && (
+          <NightPrep />
         )}
       </main>
 
       <Navigation activeTab={activeTab} onTabChange={handleTabChange} />
-    </div>
-  );
-}
-
-// ─── Home Screen ─────────────────────────────────────────────────────────────
-
-interface HomeScreenProps {
-  todayRecord: DailyRecord;
-  stats: Stats;
-  allRecords: DailyRecord[];
-  onBanana: () => void;
-  onTabChange: (tab: Tab) => void;
-  onUpdate: () => void;
-}
-
-function HomeScreen({ todayRecord, stats, allRecords, onBanana, onTabChange, onUpdate }: HomeScreenProps) {
-  const today = new Date();
-  const bothComplete = todayRecord.walked && todayRecord.ateBanana;
-
-  const MOOD_EMOJIS = ["😫", "😔", "😐", "🙂", "😊"];
-  const moodImproved =
-    todayRecord.moodBefore !== undefined &&
-    todayRecord.moodAfter !== undefined &&
-    todayRecord.moodAfter > todayRecord.moodBefore;
-
-  return (
-    <div className="flex flex-col gap-4 px-4 pt-6 pb-4">
-      {/* Header */}
-      <div className="text-center">
-        <div className="flex items-center justify-center gap-2 mb-1">
-          <span className="text-3xl">🍌</span>
-          <h1 className="text-3xl font-black text-amber-700">朝バナナ散歩</h1>
-          <span className="text-3xl">🚶</span>
-        </div>
-        <p className="text-amber-500 font-semibold text-sm">朝20分、人生を整える。</p>
-        <p className="text-gray-400 text-xs mt-0.5">{formatJapaneseDate(today)}</p>
-      </div>
-
-      {/* Today's status */}
-      <div className={`rounded-3xl p-4 border-2 ${bothComplete ? "bg-gradient-to-r from-amber-50 to-green-50 border-amber-300" : "bg-white border-amber-100"}`}>
-        <p className="text-xs font-semibold text-gray-400 mb-3 uppercase tracking-wide">今日の状態</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div className={`rounded-2xl py-3 px-4 flex items-center gap-3 ${todayRecord.walked ? "bg-green-100" : "bg-gray-50"}`}>
-            <span className="text-2xl">{todayRecord.walked ? "✅" : "🚶"}</span>
-            <div>
-              <p className="text-xs text-gray-500">朝散歩</p>
-              <p className={`text-sm font-bold ${todayRecord.walked ? "text-green-600" : "text-gray-400"}`}>
-                {todayRecord.walked ? `${todayRecord.walkMinutes}分完了` : "今日はまだ"}
-              </p>
-            </div>
-          </div>
-          <div className={`rounded-2xl py-3 px-4 flex items-center gap-3 ${todayRecord.ateBanana ? "bg-yellow-100" : "bg-gray-50"}`}>
-            <span className="text-2xl">{todayRecord.ateBanana ? "✅" : "🍌"}</span>
-            <div>
-              <p className="text-xs text-gray-500">バナナ</p>
-              <p className={`text-sm font-bold ${todayRecord.ateBanana ? "text-yellow-600" : "text-gray-400"}`}>
-                {todayRecord.ateBanana ? "食べた！" : "今日はまだ"}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {bothComplete && (
-          <div className="mt-3 text-center bg-white rounded-2xl py-2 px-3">
-            <p className="text-amber-600 font-semibold text-sm">🌟 今日の朝リズム、完成です！</p>
-            {moodImproved && (
-              <p className="text-teal-500 text-xs mt-0.5">
-                {MOOD_EMOJIS[todayRecord.moodBefore! - 1]} → {MOOD_EMOJIS[todayRecord.moodAfter! - 1]} 歩いた後、少し軽くなりましたね。
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Main action buttons */}
-      {!todayRecord.walked && (
-        <button
-          onClick={() => onTabChange("timer")}
-          className="w-full bg-amber-400 hover:bg-amber-500 text-white font-black py-5 rounded-3xl text-xl shadow-md active:scale-95 transition-all"
-        >
-          🚶 20分朝散歩を始める
-        </button>
-      )}
-      {todayRecord.walked && !todayRecord.ateBanana && (
-        <button
-          onClick={onBanana}
-          className="w-full bg-yellow-400 hover:bg-yellow-500 text-white font-black py-5 rounded-3xl text-xl shadow-md active:scale-95 transition-all"
-        >
-          🍌 バナナを食べた！
-        </button>
-      )}
-      {todayRecord.walked && todayRecord.ateBanana && (
-        <button
-          onClick={() => onTabChange("timer")}
-          className="w-full bg-green-100 hover:bg-green-200 text-green-700 font-bold py-4 rounded-3xl text-lg active:scale-95 transition-all"
-        >
-          ✓ 今日の習慣、完了です！
-        </button>
-      )}
-
-      {/* Secondary buttons */}
-      <div className="grid grid-cols-2 gap-3">
-        <button
-          onClick={onBanana}
-          disabled={todayRecord.ateBanana}
-          className="bg-yellow-50 border border-yellow-200 hover:bg-yellow-100 text-yellow-700 font-semibold py-3 rounded-2xl text-sm active:scale-95 transition-all disabled:opacity-50"
-        >
-          {todayRecord.ateBanana ? "🍌 バナナ済み" : "🍌 バナナを食べた"}
-        </button>
-        <button
-          onClick={() => onTabChange("record")}
-          className="bg-amber-50 border border-amber-200 hover:bg-amber-100 text-amber-700 font-semibold py-3 rounded-2xl text-sm active:scale-95 transition-all"
-        >
-          📝 今日のひとことを書く
-        </button>
-      </div>
-
-      {/* Streak & monthly stats */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4 text-center">
-          <p className="text-3xl font-black text-orange-500">{stats.currentStreak}</p>
-          <p className="text-xs text-orange-400 font-medium mt-0.5">🔥 連続達成日数</p>
-        </div>
-        <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-center">
-          <p className="text-3xl font-black text-amber-500">{stats.monthlyComplete}</p>
-          <p className="text-xs text-amber-400 font-medium mt-0.5">📅 今月の達成日数</p>
-        </div>
-      </div>
-
-      {/* 7-day challenge compact */}
-      <button onClick={() => onTabChange("record")} className="text-left active:scale-95 transition-all">
-        <SevenDayChallenge records={allRecords} compact />
-      </button>
-
-      {/* Plant growth preview */}
-      <button onClick={() => onTabChange("learn")} className="text-left active:scale-95 transition-all">
-        <GrowthPlant completeCount={stats.completeCount} compact />
-      </button>
-
-      {/* Today's knowledge card */}
-      <button onClick={() => onTabChange("learn")} className="text-left active:scale-95 transition-all">
-        <KnowledgeCard compact />
-      </button>
-
-      {/* Memo quick entry */}
-      <DailyMemo todayRecord={todayRecord} onUpdate={onUpdate} compact />
-
-      {/* Night prep shortcut */}
-      <button
-        onClick={() => onTabChange("record")}
-        className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex items-center gap-3 active:scale-95 transition-all w-full text-left"
-      >
-        <span className="text-2xl">🌙</span>
-        <div>
-          <p className="text-sm font-bold text-indigo-700">夜の準備をする</p>
-          <p className="text-xs text-indigo-400">明日の朝を今夜セットしておく</p>
-        </div>
-        <span className="ml-auto text-indigo-300">›</span>
-      </button>
-
-      {/* About */}
-      <div className="bg-white border border-amber-100 rounded-2xl p-4">
-        <p className="text-sm font-bold text-amber-700 mb-2">💚 このアプリについて</p>
-        <p className="text-xs text-gray-500 leading-relaxed">
-          「朝バナナ散歩」は、朝20分歩いてバナナを食べるという小さな習慣を継続支援するアプリです。
-          散歩は無料でできる。バナナは手に入りやすい。やる気と小さな仕組みさえあれば、心と体の土台作りができます。
-        </p>
-        <p className="text-xs text-gray-400 mt-2 leading-relaxed">
-          ※ このアプリは医療・医学的アドバイスを提供するものではありません。
-        </p>
-      </div>
     </div>
   );
 }
@@ -324,20 +110,18 @@ interface RecordScreenProps {
 }
 
 function RecordScreen({ todayRecord, stats, allRecords, onUpdate }: RecordScreenProps) {
-  const [view, setView] = useState<"memo" | "check" | "mood" | "night" | "stats" | "seven">("memo");
+  const [view, setView] = useState<"memo" | "calendar" | "stats" | "mood" | "learn">("memo");
 
   const subTabs: { id: typeof view; label: string }[] = [
     { id: "memo", label: "📝 日記" },
-    { id: "check", label: "✅ チェック" },
-    { id: "mood", label: "😊 気分" },
-    { id: "night", label: "🌙 夜準備" },
-    { id: "seven", label: "📆 7日" },
+    { id: "calendar", label: "📅 カレンダー" },
     { id: "stats", label: "📊 統計" },
+    { id: "mood", label: "😊 気分" },
+    { id: "learn", label: "💡 学ぶ" },
   ];
 
   return (
     <div className="flex flex-col">
-      {/* Sub navigation — horizontal scroll */}
       <div className="bg-white border-b border-amber-100 px-2 pt-4 pb-0 overflow-x-auto">
         <div className="flex gap-1 min-w-max pb-px">
           {subTabs.map((tab) => (
@@ -357,47 +141,10 @@ function RecordScreen({ todayRecord, stats, allRecords, onUpdate }: RecordScreen
       </div>
 
       {view === "memo" && <DailyMemo todayRecord={todayRecord} onUpdate={onUpdate} />}
-      {view === "check" && <TodayCheck record={todayRecord} onUpdate={onUpdate} />}
-      {view === "mood" && <MoodCheck todayRecord={todayRecord} onUpdate={onUpdate} />}
-      {view === "night" && <NightPrep />}
-      {view === "seven" && <SevenDayChallenge records={allRecords} />}
+      {view === "calendar" && <CalendarView records={allRecords} />}
       {view === "stats" && <StatsCards stats={stats} />}
-    </div>
-  );
-}
-
-// ─── Learn Screen ─────────────────────────────────────────────────────────────
-
-interface LearnScreenProps {
-  stats: Stats;
-}
-
-function LearnScreen({ stats }: LearnScreenProps) {
-  const [view, setView] = useState<"cards" | "plant">("cards");
-
-  return (
-    <div className="flex flex-col">
-      <div className="flex gap-1 bg-white border-b border-amber-100 px-4 pt-4 pb-0">
-        {(["cards", "plant"] as const).map((v) => {
-          const labels = { cards: "💡 雑学カード", plant: "🌱 植物育成" };
-          return (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`flex-1 py-2 text-sm font-semibold rounded-t-xl transition-colors ${
-                view === v
-                  ? "bg-amber-50 text-amber-600 border-t-2 border-amber-400"
-                  : "text-gray-400 hover:text-amber-400"
-              }`}
-            >
-              {labels[v]}
-            </button>
-          );
-        })}
-      </div>
-
-      {view === "cards" && <KnowledgeCard />}
-      {view === "plant" && <GrowthPlant completeCount={stats.completeCount} />}
+      {view === "mood" && <MoodCheck todayRecord={todayRecord} onUpdate={onUpdate} />}
+      {view === "learn" && <KnowledgeCard />}
     </div>
   );
 }
